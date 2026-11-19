@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#202123">
+<title>KhangGPT</title>
+<style>
+:root{color-scheme:dark;--bg:#212121;--panel:#171717;--soft:#2f3032;--text:#ececec;--muted:#a1a1aa;--green:#10a37f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;height:100dvh}
+.app{height:100dvh;display:flex}.sidebar{width:260px;background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:12px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;padding:7px 4px}.logo{width:34px;height:34px;border-radius:11px;background:var(--green);display:grid;place-items:center;font-weight:800;color:white}
+.new{border:1px solid #444;background:transparent;color:var(--text);padding:11px;border-radius:10px;text-align:left;cursor:pointer}.side-note{color:var(--muted);font-size:12px;margin-top:auto}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}.top{height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;border-bottom:1px solid #ffffff0d}.top strong{font-size:15px}.status{font-size:12px;color:var(--muted)}
+.messages{flex:1;overflow:auto;padding:26px 18px 180px}.welcome{max-width:720px;margin:10vh auto 0;text-align:center}.welcome h1{font-size:32px;margin:0 0 8px}.welcome p{color:var(--muted);margin:0 0 25px}.suggestions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;text-align:left}.suggestion{background:#2b2b2b;border:1px solid #414141;border-radius:12px;padding:13px;color:var(--text);cursor:pointer}.suggestion:hover,.new:hover{background:#383838}
+.thread{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:24px}.msg{display:flex;gap:13px;align-items:flex-start}.avatar{width:30px;height:30px;border-radius:9px;background:#3a3a3a;display:grid;place-items:center;flex-shrink:0;font-size:13px}.msg.ai .avatar{background:var(--green)}.bubble{white-space:pre-wrap;overflow-wrap:anywhere;padding-top:3px;min-width:0}.bubble.error{color:#ffb4ab}.typing{color:var(--muted)}
+.composer-wrap{position:absolute;bottom:0;left:0;right:0;padding:24px 18px 18px;background:linear-gradient(transparent,var(--bg) 22%)}.composer{max-width:780px;margin:auto;background:#2f3032;border:1px solid #505050;border-radius:18px;padding:10px 12px;display:flex;align-items:flex-end;gap:9px;box-shadow:0 8px 30px #0004}.composer textarea{flex:1;resize:none;max-height:180px;min-height:28px;border:0;outline:0;background:transparent;color:var(--text);font:inherit;padding:5px 2px}.send{border:0;background:var(--green);color:white;border-radius:11px;width:36px;height:36px;cursor:pointer;font-size:18px}.send:disabled{opacity:.45;cursor:not-allowed}.hint{text-align:center;color:var(--muted);font-size:11px;margin:9px auto 0;max-width:780px}
+@media(max-width:650px){.sidebar{display:none}.top{padding:0 15px}.messages{padding:18px 14px 170px}.welcome{margin-top:9vh}.welcome h1{font-size:27px}.suggestions{grid-template-columns:1fr}.composer-wrap{padding:16px 12px 12px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">K</span>KhangGPT</div>
+    <button class="new" id="newChat">＋ Cuộc trò chuyện mới</button>
+    <div class="side-note">KhangGPT · Trợ lý AI của bạn<br>Giao diện HTML</div>
+  </aside>
+  <main class="main">
+    <header class="top"><strong>KhangGPT</strong><span class="status" id="status">Sẵn sàng</span></header>
+    <section class="messages" id="messages" aria-live="polite">
+      <div class="welcome" id="welcome">
+        <h1>Bạn muốn hỏi gì hôm nay?</h1>
+        <p>Trò chuyện, học tập, viết code và khám phá ý tưởng cùng KhangGPT.</p>
+        <div class="suggestions">
+          <button class="suggestion">📚 Giải thích một bài học lớp 6</button>
+          <button class="suggestion">💻 Giúp tôi viết một đoạn HTML</button>
+          <button class="suggestion">🧠 Giải thích một chủ đề khó hiểu</button>
+          <button class="suggestion">✍️ Giúp tôi viết một đoạn văn</button>
+        </div>
+      </div>
+      <div class="thread" id="thread"></div>
+    </section>
+    <div class="composer-wrap">
+      <form class="composer" id="chatForm">
+        <textarea id="prompt" rows="1" placeholder="Nhắn tin cho KhangGPT..." aria-label="Tin nhắn"></textarea>
+        <button class="send" id="send" type="submit" aria-label="Gửi">↑</button>
+      </form>
+      <div class="hint">KhangGPT có thể mắc lỗi. Hãy kiểm tra thông tin quan trọng.</div>
+    </div>
+  </main>
+</div>
+<script>
+/*
+  Để bật AI thật:
+  1) Tạo backend riêng có endpoint POST /api/chat.
+  2) Backend nhận JSON { messages: [{role:"user"|"assistant", content:"..."}] }
+     và trả JSON { reply: "Nội dung AI trả lời" }.
+  3) Giữ API key ở backend, KHÔNG dán API key vào file HTML.
+*/
+const API_ENDPOINT = "/api/chat";
+const messagesEl=document.getElementById("messages");
+const thread=document.getElementById("thread");
+const welcome=document.getElementById("welcome");
+const form=document.getElementById("chatForm");
+const input=document.getElementById("prompt");
+const send=document.getElementById("send");
+const statusEl=document.getElementById("status");
+let history=[];
+let busy=false;
+
+function addMessage(role,content,extraClass=""){
+  welcome.style.display="none";
+  const row=document.createElement("div");row.className="msg "+(role==="assistant"?"ai":"");
+  const avatar=document.createElement("div");avatar.className="avatar";avatar.textContent=role==="assistant"?"K":"B";
+  const bubble=document.createElement("div");bubble.className="bubble "+extraClass;bubble.textContent=content;
+  row.append(avatar,bubble);thread.append(row);messagesEl.scrollTop=messagesEl.scrollHeight;return bubble;
+}
+function setBusy(value){busy=value;send.disabled=value;statusEl.textContent=value?"Đang trả lời…":"Sẵn sàng";}
+async function submitMessage(text){
+  text=text.trim();if(!text||busy)return;
+  addMessage("user",text);history.push({role:"user",content:text});input.value="";input.style.height="auto";setBusy(true);
+  const waiting=addMessage("assistant","KhangGPT đang suy nghĩ…","typing");
+  try{
+    const response=await fetch(API_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:history})});
+    if(!response.ok)throw new Error("Máy chủ AI trả về lỗi HTTP "+response.status);
+    const data=await response.json();
+    if(typeof data.reply!=="string"||!data.reply.trim())throw new Error("Phản hồi từ máy chủ không đúng định dạng.");
+    waiting.classList.remove("typing");waiting.textContent=data.reply;history.push({role:"assistant",content:data.reply});
+  }catch(error){
+    waiting.classList.remove("typing");waiting.classList.add("error");
+    waiting.textContent="Chưa kết nối được AI thật. "+error.message+"\n\nGiao diện đã sẵn sàng, nhưng cần backend tại "+API_ENDPOINT+" để KhangGPT có thể trả lời. Đừng đặt API key trực tiếp trong HTML.";
+  }finally{setBusy(false);messagesEl.scrollTop=messagesEl.scrollHeight;}
+}
+form.addEventListener("submit",e=>{e.preventDefault();submitMessage(input.value)});
+input.addEventListener("input",()=>{input.style.height="auto";input.style.height=Math.min(input.scrollHeight,180)+"px"});
+input.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();form.requestSubmit()}});
+document.querySelectorAll(".suggestion").forEach(b=>b.addEventListener("click",()=>{input.value=b.textContent.replace(/^[^ ]+ /,"");form.requestSubmit()}));
+document.getElementById("newChat").addEventListener("click",()=>{history=[];thread.replaceChildren();welcome.style.display="block";input.focus();});
+</script>
+</body>
+</html>
